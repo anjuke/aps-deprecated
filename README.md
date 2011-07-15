@@ -8,6 +8,7 @@ We introduce three simple method to APF framework.
 - wait_for_replies()
 
 ```php
+<?php
 $apf->publish('DEBUG', $_SERVER);
 
 start_request('sql-executor')->query('table_a',
