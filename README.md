@@ -17,17 +17,17 @@ start_request('sql-executor')->query('table_a',
         if ($status == 200) { $count_a = $reply->rows[0][0]; }
     }
 );
-start_request(‘solr-executor’)->query('index_a’,
-    ‘q=*:*&sort=score+desc’
+start_request('solr-executor')->query('index_a',
+    'q=*:*&sort=score+desc'
     function($reply) use (&$count_b) {
         if ($reply) { $count_b = $reply->records; }
     }
 );
 wait_for_replies();
-echo $count_b, $count_b, “\n”;
+echo $count_b, $count_b, "\n";
 ```
 
 
 See the [Specification][spec] for details.
 
-[spec] https://github.com/anjuke/aps/blob/master/doc/aps-spec.asciidoc
+[spec]: https://github.com/anjuke/aps/blob/master/doc/aps-spec.asciidoc
