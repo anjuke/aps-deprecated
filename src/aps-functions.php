@@ -37,7 +37,7 @@ function aps_send_frames($socket, $frames) {
 }
 
 /**
- * Unwrap the envelop from frames. Return empty envelop if there's no envelop
+ * Unwrap the envelope from frames. Return empty envelope if there's no envelop
  * delimiter(The empty frame) found.
  * Usally use list($envelope, $messages) to split the returns array.
  *
@@ -53,8 +53,8 @@ function aps_envelope_unwrap($frames) {
 }
 
 /**
- * Wrap the envelop to the given frames. The empty frame delimiter will be
- * add between the envelop and the message.
+ * Wrap the envelope to the given frames. The empty frame delimiter will be
+ * add between the envelope and the message.
  *
  * @param $envelope array of envelope frame
  * @param $message array of message frame

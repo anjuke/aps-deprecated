@@ -46,7 +46,8 @@ class APSClient {
         $frames[] = '';
         $frames[] = self::VERSION;
         $frames[] = pack('N*', $sequence, $timestamp, $expiry);
-        $frames[] = msgpack_pack(array($method, $params));
+        $frames[] = $method;
+        $frames[] = msgpack_pack($params);
 
         aps_send_frames($this->socket, $frames);
 
@@ -110,6 +111,12 @@ class APSClient {
         unset(self::$pending_requests[$sequence]);
 
         call_user_func_array($callback, array($reply, $status));
+    }
+
+    /**
+     */
+    public function __call($name, $params) {
+
     }
 }
 

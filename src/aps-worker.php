@@ -18,7 +18,7 @@ class APSWorker {
     }
 
     public function run() {
-        $this->send_hi_frames();
+        $this->send_heartbeat_frames();
 
         $poll = new ZMQPoll();
         $poll->add($this->socket, ZMQ::POLL_IN);
@@ -28,12 +28,12 @@ class APSWorker {
     		if ($events) {
             	$this->process();
             } else {
-                $this->send_hi_frames();
+                $this->send_heartbeat_frames();
             }
     	}
     }
 
-    protected function send_hi_frames() {
+    protected function send_heartbeat_frames() {
         aps_send_frames($this->socket, array('', self::VERSION, chr(0x01)));
     }
 
@@ -57,13 +57,15 @@ class APSWorker {
             return;
         }
 
-        $request = array_shift($message);
-        if ($request === NULL) {
+        $method = array_shift($message);
+        if ($method === NULL) {
             $this->send_reply_frames($envelope, $sequence, $now, 400, NULL);
             return;
         }
-
-        list($method, $params) = msgpack_unpack($request);
+        $params = array_shift($message);
+        if ($params !== NULL) {
+            $params = msgpack_unpack($params);
+        }
 
         $reply = call_user_func_array(array($this->delegate, $method), $params);
 

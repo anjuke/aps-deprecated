@@ -131,8 +131,9 @@ v1.0, July 2010
 **REQUEST**是由多个帧组成的ØMQ消息，具体格式为:
 
 - Frame 1: "APS10" (5 bytes string)
-- Frame 2, Sequence, Timestamp, Expiry (4 bytes each, big endian)
-- Frame 3: Request body (msgpack([method, params]))
+- Frame 2: Sequence, Timestamp, Expiry (4 bytes each, big endian)
+- Frame 3: Method (printable string)
+- Frame 4: Request body (msgpack(params))
 
 **REPLY**是由多个帧组成的ØMQ消息，具体格式为:
 
@@ -160,8 +161,9 @@ v1.0, July 2010
 - Frame 2: 0x00
 - Frame 3: Envelope (from upstream route, may more than one frame)
 - Frame 4: Empty
-- Frame 5, Sequence, Timestamp, Expiry (4 bytes each, big endian)
-- Frame 6: Request body (msgpack([method, params]))
+- Frame 5: Sequence, Timestamp, Expiry (4 bytes each, big endian)
+- Frame 6: Method (printable string)
+- Frame 7: Request body (msgpack(params))
 
 **REPLY**是由多个帧组成的ØMQ消息，具体格式为:
 
@@ -169,6 +171,6 @@ v1.0, July 2010
 - Frame 2: 0x00
 - Frame 3: Envelope (from upstream route, may more than one frame)
 - Frame 4: Empty
-- Frame 6, Sequence, Timestamp, Status (4 bytes each, big endian)
-- Frame 7: Reply body (msgpack([result]))
+- Frame 5: Sequence, Timestamp, Status (4 bytes each, big endian)
+- Frame 6: Reply body (msgpack([result]))
 
