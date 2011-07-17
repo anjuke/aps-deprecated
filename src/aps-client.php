@@ -21,6 +21,7 @@ class APSClient {
 
         self::$sockets[] = $socket;
         $this->socket = $socket;
+        $this->expiry = 1000;
     }
 
     public function __destruct () {
@@ -32,16 +33,30 @@ class APSClient {
 
     protected $pending_request_count;
 
+    protected $expiry;
+
     protected static $sockets = array();
     protected static $pending_requests = array();
     protected static $sequence = 0;
 
+    protected static $replies = array();
+
+    public function set_expiry($expiry) {
+        $this->expirt = $expiry;
+    }
+
+    public function get_expiry() {
+        return $this->expirt;
+    }
 
     /**
      */
-    public function start_request($method, $params, $callback, $expiry = 0) {
+    public function start_request($method, $params, $callback, $expiry = NULL) {
         $sequence = ++self::$sequence;
         $timestamp = aps_millitime();
+        if ($expiry === NULL) {
+            $expiry = $this->expiry;
+        }
 
         $frames[] = '';
         $frames[] = self::VERSION;
@@ -93,6 +108,21 @@ class APSClient {
         }
         return count(self::$pending_requests);
     }
+
+    public static function fetch_reply($sequence, $keep = false) {
+        if (!isset(self::$replies[$sequence])) {
+            return array(NULL, 101);
+        }
+        $rs = self::$replies[$sequence];
+        if (!$keep) {
+            unset(self::$replies[$sequence]);
+        }
+        return $rs;
+    }
+
+    protected static function store_reply($sequence, $reply, $status) {
+        self::$replies[$sequence] = array($reply, $status);
+    }
     
     /**
      */
@@ -110,13 +140,17 @@ class APSClient {
         list($client, $callback) = self::$pending_requests[$sequence];
         unset(self::$pending_requests[$sequence]);
 
-        call_user_func_array($callback, array($reply, $status));
+        if ($callback) {
+            call_user_func_array($callback, array($reply, $status));
+        } else {
+            self::store_reply($sequence, $reply, $status);
+        }
     }
 
     /**
      */
-    public function __call($name, $params) {
-
+    public function __call($name, $args) {
+        return $this->start_request($name, $args, NULL, $this->expiry);
     }
 }
 

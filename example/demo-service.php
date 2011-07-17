@@ -29,8 +29,9 @@ if (isset($argv[1])) {
 }
 
 $pids = array();
+$worker = dirname(__FILE__) . '/demo-worker.php';
 for ($i = 0; $i < $c; $i++) {
-    $pids[] = fork_and_exec('/usr/bin/env', array('php', 'demo-worker.php'));
+    $pids[] = fork_and_exec('/usr/bin/env', array('php', $worker));
 }
 register_shutdown_function(function($pids) {
     foreach($pids as $pid) {
