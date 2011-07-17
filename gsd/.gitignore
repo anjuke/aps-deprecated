@@ -1,0 +1,15 @@
+Makefile
+Makefile.in
+aclocal.m4
+autom4te.cache
+config.log
+config.status
+config/
+configure
+libtool
+src/Makefile
+src/Makefile.in
+src/.deps/
+src/.libs/
+src/*.o
+src/gsd
