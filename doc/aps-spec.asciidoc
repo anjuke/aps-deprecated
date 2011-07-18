@@ -122,41 +122,50 @@ v1.0, July 2010
 
 ................
 
-我们这里还规范了一份处理程序和其所属的服务进程间的通讯协议。采用这一规范来实现的处理程序将能够被我们的通用服务进程调度和管理，使处理程序是采用不同的语言开发。我们的规范要求处理程序采用ØMQ的**XREQ**套接字连接至其所属的服务进程，并等待分配的任务。
+我们这里还规范了一份处理程序和其所属的服务进程间的通讯协议。采用这一规范来实现的处理程序将能够被我们的通用服务进程调度和管理，使处理程序是采用不同的语言开发。我们的规范要求处理程序采用ØMQ的**XREQ**套接字连接至其所属的服务进程，发出准备好的消息，并等待分配的任务。
+
+
+== Message Format ==
+- 客户程序与服务进程之间通讯的消息格式应当完全采用如下**APS/Client**规范。
+- 通用服务进程与处理程序之间通讯的消息格式采用如下的**APS/Worker**规范。
 
 
 === APS/Client ===
-客户程序与服务进程间的通讯只有两个命令**REQUEST**和**REPLY**。由客户程序向服务进程发起的是REQUEST命令；服务进程返回的是REPLY命令。
+客户程序与服务进程间通过**REQUEST**和**REPLY**互相通讯。由客户程序向服务进程发起的是**REQUEST**命令；服务进程返回的是**REPLY**命令。
 
-**REQUEST**是由多个帧组成的ØMQ消息，具体格式为:
-
+.REQUEST
 - Frame 1: "APS10" (5 bytes string)
 - Frame 2: Sequence, Timestamp, Expiry (4 bytes each, big endian)
 - Frame 3: Method (printable string)
 - Frame 4: Request body (msgpack(params))
 
-**REPLY**是由多个帧组成的ØMQ消息，具体格式为:
-
+.REPLY
 - Frame 1: "APS10" (5 bytes string)
 - Frame 2: Sequence, Timestamp, Status (4 bytes each, big endian)
 - Frame 3: Reply body (msgpack(result))
 
 
 === APS/Worker ===
+通用的服务进程将通过以下消息与处理程序进行通讯。
 
-**HEARTBEAT**是由多个帧组成的ØMQ消息，具体格式为:
+第一个消息由处理程序发起，处理程序向通用服务进程发送**HEARTBEAT**消息，表示已经准备妥当可以接收任务；通用服务进程将客户程序的请求以**REQUEST**命令转发给处理程序；处理程序完成后以**REPLY**命令回复给通用服务进程；通用服务进程负责转给请求的客户程序。REQUEST命令只能由服务进程发起；REPLY命令只能由处理程序发起。
 
+处理程序和通用服务进程间可以定时发送**HEARTBEAT**消息，以告知对方自己还处在正常状态。单通用服务进程在一段时间内没有收到处理程序的状态报告，可以认为改处理程序异常，而不再给其分配任务。
+
+处理程序主动退出时应该使用**GOODBYE**消息通知通用服务进程，通用服务进程保证不再分配任务给这个处理程序。当处理程序收到通用服务进程发来的**GOODBYE**消息，在处理完当前任务后可以退出进程。
+
+
+.HEARTBEAT
 - Frame 1: "APS10"
 - Frame 2: 0x01 (one byte, representing HEARTBEAT)
 - Frame 3: Timestamp (4 bytes each, big endian)
 
-**GOODBYE**是由多个帧组成的ØMQ消息，具体格式为:
-
+.GOODBYE
 - Frame 1: "APS10"
 - Frame 2: 0x02 (one byte, presenting BYE)
+- Frame 3: Timestamp (4 bytes each, big endian)
 
-**REQUEST**是由多个帧组成的ØMQ消息，具体格式为:
-
+.REQUEST
 - Frame 1: "APS10"
 - Frame 2: 0x00
 - Frame 3: Envelope (from upstream route, may more than one frame)
@@ -165,12 +174,16 @@ v1.0, July 2010
 - Frame 6: Method (printable string)
 - Frame 7: Request body (msgpack(params))
 
-**REPLY**是由多个帧组成的ØMQ消息，具体格式为:
-
+.REPLY
 - Frame 1: "APS10"
 - Frame 2: 0x00
 - Frame 3: Envelope (from upstream route, may more than one frame)
 - Frame 4: Empty
 - Frame 5: Sequence, Timestamp, Status (4 bytes each, big endian)
 - Frame 6: Reply body (msgpack([result]))
+
+
+== Realibility ==
+可靠性的控制不此描述，由客户程序和通用服务进程的具体实现负责可靠性。
+
 
