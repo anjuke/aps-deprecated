@@ -14,7 +14,7 @@ class APSClient {
     public function __construct($context, $endpoints) {
         $socket = new ZMQSocket($context, ZMQ::SOCKET_XREQ);
         $socket->setsockopt(ZMQ::SOCKOPT_LINGER, 0);
-#        $socket->setsockopt(ZMQ::SOCKOPT_HWM, 10);
+        $socket->setsockopt(ZMQ::SOCKOPT_HWM, 1000);
         foreach ($endpoints as $endpoint) {
             $socket->connect($endpoint);
         }
@@ -49,9 +49,13 @@ class APSClient {
         return $this->expirt;
     }
 
+    public function set_default_callback($callback) {
+        $this->default_callback = $callback;
+    }
+
     /**
      */
-    public function start_request($method, $params, $callback, $expiry = NULL) {
+    public function start_request($method, $params, $callback = NULL, $expiry = NULL) {
         $sequence = ++self::$sequence;
         $timestamp = aps_millitime();
         if ($expiry === NULL) {
@@ -140,6 +144,9 @@ class APSClient {
         list($client, $callback) = self::$pending_requests[$sequence];
         unset(self::$pending_requests[$sequence]);
 
+        if (!$callback) {
+            $callback = $this->default_callback;
+        }
         if ($callback) {
             call_user_func_array($callback, array($reply, $status));
         } else {
