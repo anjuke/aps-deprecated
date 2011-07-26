@@ -2,7 +2,10 @@
 import getopt
 import sys
 import os
+import zmq
 
+class GSD:
+    pass
 
 def usage():
     print('usage: %s [options] <worker command line>' % os.path.basename(sys.argv[0]))
@@ -18,6 +21,9 @@ options:
     -b <endpoint>, --backend=<endpoint>
         The binding endpoints where workers will connect to
         [default: ipc://tmp/(pid-of-gsd).ipc]
+
+    -m <endpoint>, --monitor=<endpoint>
+        The binding endpoints where monitor events will be published to
 
     -n, --min-worker=<num>
         The mininum number of workers should be started before accepting 
@@ -42,14 +48,16 @@ options:
 def parse_args(argv):
     feps = []       # frontend endpoints
     beps = []       # backend endpoints
+    meps = []       # monitor endpoints
     minw = 1        # min worker
     maxw = 32       # max worker
     spaw = 8        # spare worker
     hbi = 1000      # heartbeat interval
     
     try:
-        opts, args = getopt.getopt(argv, 'hf:b:n:x:s:i:dv', ['help',
-            'frontend=', 'backend=', 'min-worker=', 'max-worker=', 'spare-worker=',
+        opts, args = getopt.getopt(argv, 'hf:b:m:n:x:s:i:dv', ['help',
+            'frontend=', 'backend=', 'monitor=',
+            'min-worker=', 'max-worker=', 'spare-worker=',
             'heartbeat-interval=', 'daemon=', 'verbose='])
     except getopt.GetoptError, err:
         usage()
@@ -61,6 +69,8 @@ def parse_args(argv):
             feps.append(a)
         elif o in ('-b', '--backend'):
             beps.append(a)
+        elif o in ('-m', '--monitor'):
+            meps.append(a)
         elif o in ('-n', '--min-worker'):
             minw = a
         elif o in ('-x', '--max-worker'):
@@ -79,7 +89,7 @@ def parse_args(argv):
     if (not args):
         usage()
 
-    return (args, feps, beps, maxw, minw, spaw, hbi)
+    return (args, feps, beps, meps, maxw, minw, spaw, hbi)
 
 def main():
     print "Generic Service Daemon"
