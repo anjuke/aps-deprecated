@@ -135,13 +135,13 @@ v1.0, July 2010
 
 ==== REQUEST ====
 - Frame 1: "APS10" (5 bytes string)
-- Frame 2: Sequence, Timestamp, Expiry (4 bytes each, big endian)
+- Frame 2: Sequence, Timestamp, Expiry (msgpacked array)
 - Frame 3: Method (printable string)
 - Frame 4: Request body (msgpack(params))
 
 ==== REPLY ====
 - Frame 1: "APS10" (5 bytes string)
-- Frame 2: Sequence, Timestamp, Status (4 bytes each, big endian)
+- Frame 2: Sequence, Timestamp, Status (msgpacked array)
 - Frame 3: Reply body (msgpack(result))
 
 
@@ -158,19 +158,19 @@ v1.0, July 2010
 ==== HEARTBEAT ====
 - Frame 1: "APS10"
 - Frame 2: 0x01 (one byte, representing HEARTBEAT)
-- Frame 3: Timestamp (4 bytes each, big endian)
+- Frame 3: Timestamp (msgpacked)
 
 ==== GOODBYE ====
 - Frame 1: "APS10"
-- Frame 2: 0x02 (one byte, presenting BYE)
-- Frame 3: Timestamp (4 bytes each, big endian)
+- Frame 2: 0x02 (one byte, representing GOODBYE)
+- Frame 3: Timestamp (msgpacked)
 
 ==== REQUEST ====
 - Frame 1: "APS10"
 - Frame 2: 0x00
 - Frame 3: Envelope (from upstream route, may more than one frame)
 - Frame 4: Empty
-- Frame 5: Sequence, Timestamp, Expiry (4 bytes each, big endian)
+- Frame 5: Sequence, Timestamp, Expiry (msgpacked array)
 - Frame 6: Method (printable string)
 - Frame 7: Request body (msgpack(params))
 
@@ -179,7 +179,7 @@ v1.0, July 2010
 - Frame 2: 0x00
 - Frame 3: Envelope (from upstream route, may more than one frame)
 - Frame 4: Empty
-- Frame 5: Sequence, Timestamp, Status (4 bytes each, big endian)
+- Frame 5: Sequence, Timestamp, Status (msgpacked array)
 - Frame 6: Reply body (msgpack([result]))
 
 

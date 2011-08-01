@@ -1,4 +1,5 @@
 import unittest
+import msgpack
 from aps import *
 
 class APSTestCase(unittest.TestCase):
@@ -31,9 +32,9 @@ class APSTestCase(unittest.TestCase):
 
     def test_parse_client_request(self):
         cases = [
-            (['APS10', struct.pack('>3L', 1,2,3), 'method', 'params'],
+            (['APS10', msgpack.packb([1, 2, 3]), 'method', 'params'],
                 ('APS10', 1, 2, 3, 'method', ['params'])),
-            (['APS09', struct.pack('>3L', 2,3,1), 'method'],
+            (['APS09', msgpack.packb([2, 3, 1]), 'method'],
                 ('APS09', 2, 3, 1, 'method', [])),
         ]
         for frames, expect in cases:
@@ -42,9 +43,8 @@ class APSTestCase(unittest.TestCase):
 
     def test_parse_invalid_client_request(self):
         cases = [
-            (['APS10', struct.pack('>2L', 1,2), 'method', 'params'],
+            (['APS10', '1', 'x', 'y', 'method', 'params'],
                 'invalid sequence, timestamp, expiry'),
-            (['APS10', struct.pack('>3L', 1,2,3)], 'no method'),
             ([], 'empty request')
         ]
         for frames, msg in cases:
@@ -54,6 +54,14 @@ class APSTestCase(unittest.TestCase):
                 self.assertTrue(True)
             else:
                 self.assertTrue(False, msg)
+
+    def test_build_client_reply(self):
+        frames = build_client_reply(1, 200, ['body', 'more'])
+        sequence, timestamp, status = msgpack.unpackb(frames[1])
+        self.assertEqual(frames[0], VERSION)
+        self.assertEqual(sequence, 1)
+        self.assertEqual(status, 200)
+        self.assertEqual(frames[2:], ['body', 'more'])
 
 if __name__ == '__main__':
     unittest.main()
