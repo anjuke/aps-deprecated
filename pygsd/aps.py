@@ -50,7 +50,7 @@ def parse_client_request(frames):
         return (version, sequence, timestamp, expiry, method, body)
 
 def build_client_reply(sequence, status, body):
-    frames = [VERSION, msgpack.packb([sequence, microtime(), status])]
+    frames = [VERSION, msgpack.packb([sequence, millitime(), status])]
     frames.extend(body)
     return frames
     
