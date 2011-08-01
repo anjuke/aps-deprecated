@@ -49,10 +49,10 @@ class APSWorker {
 
     protected function process_request($message) {
         list($envelope, $message) = aps_envelope_unwrap($message);
-        list($sequence, $timestamp, $expiry) = array_values(unpack('N*', array_shift($message)));
+        list($sequence, $timestamp, $expiry) = msgpack_unpack(array_shift($message));
 
         $now = aps_millitime();
-        if ($timestamp + $expiry > $now) {
+        if ($timestamp + $expiry < $now) {
             $this->send_reply_frames($envelope, $sequence, $now, 503, NULL);
             return;
         }
@@ -76,7 +76,7 @@ class APSWorker {
     protected function send_reply_frames($envelope, $sequence, $timestamp, $status, $reply) {
         $frames = array_merge(array('', self::VERSION, chr(0x00)), $envelope);
         $frames[] = '';
-        $frames[] = pack('N*', $sequence, $timestamp, $status);
+        $frames[] = msgpack_pack(array($sequence, $timestamp, $status));
         if ($reply !== NULL) {
             $frames[] = msgpack_pack($reply);
         }

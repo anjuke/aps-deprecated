@@ -64,7 +64,7 @@ class APSClient {
 
         $frames[] = '';
         $frames[] = self::VERSION;
-        $frames[] = pack('N*', $sequence, $timestamp, $expiry);
+        $frames[] = msgpack_pack(array($sequence, $timestamp, $expiry));
         $frames[] = $method;
         $frames[] = msgpack_pack($params);
 
@@ -134,7 +134,7 @@ class APSClient {
         $frames = aps_recv_frames($socket);
         list($envelope, $message) = aps_envelope_unwrap($frames);
         $version = array_shift($message);
-        list($sequence, $timestamp, $status) = array_values(unpack('N*', array_shift($message)));
+        list($sequence, $timestamp, $status) = msgpack_unpack(array_shift($message));
 
         $reply = array_shift($message);
         if ($reply !== NULL) {
@@ -145,7 +145,7 @@ class APSClient {
         unset(self::$pending_requests[$sequence]);
 
         if (!$callback) {
-            $callback = $this->default_callback;
+            $callback = $client->default_callback;
         }
         if ($callback) {
             call_user_func_array($callback, array($reply, $status));
