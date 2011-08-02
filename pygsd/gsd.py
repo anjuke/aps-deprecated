@@ -2,6 +2,7 @@
 import getopt
 import sys
 import os
+import time
 import zmq
 from zmq.eventloop import ioloop, zmqstream
 
@@ -11,44 +12,59 @@ def microtime():
 def millitime():
     return int(round(time.time() * 1000))
 
-class GSD:
-    VERSION = 'APS10'
-    EMPTY = r''
-    REQUEST = '\x00'
-    HEARTBEAT = '\x01'
-    GOODBYE = '\x02'
+VERSION = r'APS10'
+EMPTY = r''
 
-    def __init__(self, client_socket, worker_socket, monitor_socket):
-        self.spare_workers =  [] # (wid, timestamp)
-        self.leased_workers = {} # wid:timestamp
+class GSD:
+    def __init__(self, args, feps, beps, meps, maxw, minw, spaw, hbi):
+        self.worker_cmd = args
+
+        self.maxw = maxw    # max num of workers
+        self.minw = minw    # min num of workers
+        self.spaw = spaw    # spare workers
+        self.maintain_period = hbi;
+        self.heartbeat_timeout = hbi << 2;
+
+        self.spare_workers =  []    # item is tuple (wid, timestamp)
+        self.leased_workers = {}    # item is wid: timestamp
+
+        self.pending_requests = []  # to hold requests if there's no worker available
+
+
+
+        self.client_socket = self.create_socket(zmq.XREP, feps)
+        self.worker_socket = self.create_socket(zmq.XREP, beps)
+        self.monitor_socket = self.create_socket(zmq.PUB, meps)
 
         self.loop = ioloop.IOLoop.instance()
-        self.client_stream = zmqstream(client_socket, self.loop)
-        self.worker_stream = zmqstream(worker_stream, self.loop)
-        self.monitor_stream = zmqstream(monitor_socket, self.loop)
+        self.client_stream = zmqstream.ZMQStream(self.client_socket, self.loop)
+        self.worker_stream = zmqstream.ZMQStream(self.worker_socket, self.loop)
+        self.monitor_stream = zmqstream.ZMQStream(self.monitor_socket, self.loop)
 
-        self.client_stream.on_recv(self.client_handler)
-        self.worker_stream.on_recv(self.worker_handler)
+        self.client_stream.on_recv(self.handle_client)
+        self.worker_stream.on_recv(self.handle_worker)
 
-        self.maintainer = ioloop.PeriodicCallback(self.maintain, self.period, self.loop)
+        self.maintainer = ioloop.PeriodicCallback(self.maintain, self.maintain_period, self.loop)
+
+    def create_socket(self, socktype, endpoints):
+        socket = zmq.Socket(zmq.Context.instance(), socktype)
+        socket.setsockopt(zmq.LINGER, 0)
+        for endpoint in endpoints:
+            socket.bind(endpoint)
+        return socket
+
+    def start(self):
         self.maintainer.start()
-
-    def start():
         self.loop.start()
 
-    def stop():
+    def stop(self):
         self.loop.stop()
 
-    def maintain():
+    def maintain(self):
+        self.maintain_workers()
         pass
 
-
-    def handle_client(self, msg):
-        worker = self.pop_worker()
-        # TODO:// no worker available
-        self.handle_client(worker, msg)
-        
-    def _handle_client(self, worker, frames):
+    def handle_client(self, frames):
         frames = client_socket.recv_multiparts()
         i = frames.index[EMPTY]
         if frames[i+1] != VERSION:
@@ -56,27 +72,42 @@ class GSD:
         sequence, timestamp, expiry = msgpack.unpackb(frames[i+2])
         # handle expired
 
-        frames = build_worker_request(self, worker, frames[:i], frames[i+2:])
-        worker_socket.send_multiparts(frames)
+        wid = self.borrow_worker()
+        if wid:
+            frames = self.build_worker_request(self, wid, frames[:i], frames[i+2:])
+            self.worker_stream.send_multipart(frames)
+        else:
+            self.pending_requests.push(frames)
+            # TODO: warning
 
-    def handle_worker(self, msg):
-        self._handle_client(self, msg)
+    def handle_pending_requests(self):
+        while self.pending_requests:
+            frames = self.pending_requests.pop(0)
+            handle_client(frames)
 
-    def _handle_worker(self, frames):
-        worker_id = frames[0]
+    def handle_worker(self, frames):
         i = frames.index[EMPTY]
+        assert(i == 1)
+        wid = frames[0]
 
         if frames[i+1] != VERSION:
             pass # handle version mismatch
+
         command = frames[i+2]
-        if command == REQUEST:
+        if command == '\x00':   # REQUEST
             j = frames.index[EMPTY, i+3]
             frames = build_client_reply(frames[i+3,j], frames[j+1])
-            client_socket.send_multiparts(frames)
-        elif command == HEARTBEAT:
+            client_socket.send_multipart(frames)
+            self.return_worker(wid)
+            self.handle_pending_requests()
+
+        elif command == '\x01': # HEARTBEAT
+            self.return_worker(wid)
+            self.handle_pending_requests()
+
+        elif command == '\x02': # GOODBYE
             pass #
-        elif command == GOODBYE:
-            pass #
+
         else:
             pass # handle unknown command
 
@@ -84,7 +115,7 @@ class GSD:
         frames = worker_envelope[:]
         frames.append(EMPTY)
         frames.append(VERSION)
-        frames.append(REQUEST)
+        frames.append('\x00')
         frames.extend(envelope)
         frames.append(EMPTY)
         frames.extend(body)
@@ -107,6 +138,9 @@ class GSD:
         self.spare_workers.append((wid, millitime()))
 
     def maintain_workers(self):
+        """ 1. terminate dead workers """
+        """ 2. create new worker if too few """
+        """ 3. terminate spare workers if too many """
         now = millitime()
         deadtime = now - self.heartbeat_timeout
         size = len(self.spare_workers)
@@ -194,13 +228,13 @@ def parse_args(argv):
         elif o in ('-m', '--monitor'):
             meps.append(a)
         elif o in ('-n', '--min-worker'):
-            minw = a
+            minw = int(a)
         elif o in ('-x', '--max-worker'):
-            maxw = a
+            maxw = int(a)
         elif o in ('-s', '--spare-worker'):
-            maxiw = a
+            maxiw = int(a)
         elif o in ('--hearbeat-interval='):
-            hbi = a
+            hbi = int(a)
         elif o in ('-d', '--daemon'):
             pass
         elif o in ('-v', '--verbose'):
@@ -216,7 +250,9 @@ def parse_args(argv):
 def main():
     print "Generic Service Daemon"
     print
-    print parse_args(sys.argv[1:])
+    args, feps, beps, meps, maxw, minw, spaw, hbi = parse_args(sys.argv[1:])
+    gsd = GSD(args, feps, beps, meps, maxw, minw, spaw, hbi)
+    gsd.start()
     return 0
 
 
