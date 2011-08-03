@@ -9,6 +9,7 @@ class APSWorker {
     public function __construct($context, $endpoint) {
         $socket = new ZMQSocket($context, ZMQ::SOCKET_XREQ);
         $socket->setsockopt(ZMQ::SOCKOPT_LINGER, 0);
+        $socket->setsockopt(ZMQ::SOCKOPT_IDENTITY, strval(posix_getpid()));
         $socket->connect($endpoint);
         $this->socket = $socket;
 
@@ -25,6 +26,9 @@ class APSWorker {
     	while (!$this->interrupted) {
             $readable = $writeable = array();
     		$events = $poll->poll($readable, $writeable, $this->interval);
+            if (posix_getppid() == 1) {
+                break;
+            }
     		if ($events) {
             	$this->process();
             } else {
