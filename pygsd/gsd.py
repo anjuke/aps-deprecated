@@ -1,10 +1,16 @@
+#!/usr/bin/env python
 
 import getopt
 import sys
 import os
+import subprocess
 import time
+import msgpack
 import zmq
 from zmq.eventloop import ioloop, zmqstream
+
+VERSION = r'APS10'
+EMPTY = r''
 
 def microtime():
     return int(round(time.time() * 1000 * 1000))
@@ -12,29 +18,49 @@ def microtime():
 def millitime():
     return int(round(time.time() * 1000))
 
-VERSION = r'APS10'
-EMPTY = r''
-
 class GSD:
-    def __init__(self, args, feps, beps, meps, maxw, minw, spaw, hbi):
-        self.worker_cmd = args
+    feps = []       # frontend endpoints
+    beps = []       # backend endpoints
+    meps = []       # monitor endpoints
+    minw = 1        # min worker
+    maxw = 32       # max worker
+    spaw = 8        # spare worker
+    timeout = 10000 # worker timeout
+    interval = 1000 # maintain interval
+    args = []
 
-        self.maxw = maxw    # max num of workers
-        self.minw = minw    # min num of workers
-        self.spaw = spaw    # spare workers
-        self.maintain_period = hbi;
-        self.heartbeat_timeout = hbi << 2;
+    def start(self):
+        for i in xrange(self.minw):
+            self.create_worker()
 
-        self.spare_workers =  []    # item is tuple (wid, timestamp)
-        self.leased_workers = {}    # item is wid: timestamp
+        self.spare_workers = []
+        self.workers = {}
 
         self.pending_requests = []  # to hold requests if there's no worker available
 
+        def create_socket(socktype, endpoints):
+            socket = zmq.Socket(zmq.Context.instance(), socktype)
+            socket.setsockopt(zmq.LINGER, 0)
+            for endpoint in endpoints:
+                socket.bind(endpoint)
+            return socket
 
+        if self.feps:
+            feps = self.feps
+        else:
+            feps = ['tcp://*:5000']
+        if self.beps:
+            beps = self.beps
+        else:
+            beps = ['tcp://*:5001']
+        if self.meps:
+            meps = self.meps
+        else:
+            meps = ['tcp://*:5002']
 
-        self.client_socket = self.create_socket(zmq.XREP, feps)
-        self.worker_socket = self.create_socket(zmq.XREP, beps)
-        self.monitor_socket = self.create_socket(zmq.PUB, meps)
+        self.client_socket = create_socket(zmq.XREP, feps)
+        self.worker_socket = create_socket(zmq.XREP, beps)
+        self.monitor_socket = create_socket(zmq.PUB, meps)
 
         self.loop = ioloop.IOLoop.instance()
         self.client_stream = zmqstream.ZMQStream(self.client_socket, self.loop)
@@ -44,16 +70,8 @@ class GSD:
         self.client_stream.on_recv(self.handle_client)
         self.worker_stream.on_recv(self.handle_worker)
 
-        self.maintainer = ioloop.PeriodicCallback(self.maintain, self.maintain_period, self.loop)
+        self.maintainer = ioloop.PeriodicCallback(self.maintain, self.interval, self.loop)
 
-    def create_socket(self, socktype, endpoints):
-        socket = zmq.Socket(zmq.Context.instance(), socktype)
-        socket.setsockopt(zmq.LINGER, 0)
-        for endpoint in endpoints:
-            socket.bind(endpoint)
-        return socket
-
-    def start(self):
         self.maintainer.start()
         self.loop.start()
 
@@ -62,11 +80,9 @@ class GSD:
 
     def maintain(self):
         self.maintain_workers()
-        pass
 
     def handle_client(self, frames):
-        frames = client_socket.recv_multiparts()
-        i = frames.index[EMPTY]
+        i = frames.index(EMPTY)
         if frames[i+1] != VERSION:
             pass # handle version mismatch
         sequence, timestamp, expiry = msgpack.unpackb(frames[i+2])
@@ -74,19 +90,21 @@ class GSD:
 
         wid = self.borrow_worker()
         if wid:
-            frames = self.build_worker_request(self, wid, frames[:i], frames[i+2:])
+            frames = self.build_worker_request(wid, frames[:i], frames[i+2:])
             self.worker_stream.send_multipart(frames)
         else:
-            self.pending_requests.push(frames)
-            # TODO: warning
+            self.pending_requests.append(frames)
+
+        return wid
 
     def handle_pending_requests(self):
         while self.pending_requests:
             frames = self.pending_requests.pop(0)
-            handle_client(frames)
+            if not self.handle_client(frames):
+                break
 
     def handle_worker(self, frames):
-        i = frames.index[EMPTY]
+        i = frames.index(EMPTY)
         assert(i == 1)
         wid = frames[0]
 
@@ -95,9 +113,9 @@ class GSD:
 
         command = frames[i+2]
         if command == '\x00':   # REQUEST
-            j = frames.index[EMPTY, i+3]
-            frames = build_client_reply(frames[i+3,j], frames[j+1])
-            client_socket.send_multipart(frames)
+            j = frames.index(EMPTY, i+3)
+            frames = self.build_client_reply(frames[i+3:j], frames[j+1:])
+            self.client_stream.send_multipart(frames)
             self.return_worker(wid)
             self.handle_pending_requests()
 
@@ -111,11 +129,8 @@ class GSD:
         else:
             pass # handle unknown command
 
-    def build_worker_request(self, worker_envelope, envelope, body):
-        frames = worker_envelope[:]
-        frames.append(EMPTY)
-        frames.append(VERSION)
-        frames.append('\x00')
+    def build_worker_request(self, wid, envelope, body):
+        frames = [wid, EMPTY, VERSION, '\x00']
         frames.extend(envelope)
         frames.append(EMPTY)
         frames.extend(body)
@@ -128,34 +143,50 @@ class GSD:
         frames.extend(body)
         return frames
 
+    def create_worker(self):
+        p = subprocess.Popen(self.args)
+        print p.pid
+
     def borrow_worker(self):
-        wid, timestamp = self.spare_workers.pop(0)
-        self.leased_workers[wid] = timestamp
+        if not self.spare_workers:
+            return None
+
+        wid = self.spare_workers.pop(0)
+        (timestamp, leased) = self.workers[wid]
+        self.workers[wid] = (timestamp, True)
         return wid
 
     def return_worker(self, wid):
-        del self.leased_workers[wid]
-        self.spare_workers.append((wid, millitime()))
+        try:
+            (timestamp, leased) = self.workers[wid]
+        except KeyError:
+            self.spare_workers.append(wid)
+        else:
+            if leased:
+                self.spare_workers.append(wid)
+
+        self.workers[wid] = (millitime(), False)
 
     def maintain_workers(self):
+        return
         """ 1. terminate dead workers """
         """ 2. create new worker if too few """
         """ 3. terminate spare workers if too many """
         now = millitime()
-        deadtime = now - self.heartbeat_timeout
+        expiry = now - self.timeout
         size = len(self.spare_workers)
         i = 0
         while i < size:
             wid, timestamp = self.spare_workers[i]
-            if timestamp > deadtime: 
+            if timestamp >= expiry: 
                 break
             i += 1
-        dead_spare_workers = self.spare_workers[:i]
-        dead_leased_workers = list(wid
-            for wid, timestamp in self.leased_workers.iteritems() if timestamp > deadtime)
+        expired_spare_workers = self.spare_workers[:i]
+        expired_leased_workers = list(wid
+            for wid, timestamp in self.leased_workers.iteritems() if timestamp < expiry)
 
         self.spare_workers = self.spare_workers[i+1:]
-        for wid in dead_leased_workers:
+        for wid in expired_leased_workers:
             del self.leased_workers[wid]
 
         # say GOODBYE to workers?
@@ -191,8 +222,11 @@ options:
     -s, --spare-worker=<num>
         The maxinum number of spare workers [default: 8]
 
-    --hearbeat-interval=<milliseconds>
-        Heartbeat interval in millisecond [default: 1000]
+    --timeout=<milliseconds>
+        Worker timeout in millisecond [default: 1000]
+    
+    --interval=<milliseconds>
+        Maintain interval in millisecond [default: 1000]
     
     -d, --daemon
 
@@ -200,21 +234,17 @@ options:
 """
     sys.exit(2)
 
+def main():
+    print "Generic Service Daemon"
+    print
+    gsd = GSD()
 
-def parse_args(argv):
-    feps = []       # frontend endpoints
-    beps = []       # backend endpoints
-    meps = []       # monitor endpoints
-    minw = 1        # min worker
-    maxw = 32       # max worker
-    spaw = 8        # spare worker
-    hbi = 1000      # heartbeat interval
-    
+    # parse args
     try:
-        opts, args = getopt.getopt(argv, 'hf:b:m:n:x:s:i:dv', ['help',
+        opts, args = getopt.getopt(sys.argv[1:], 'hf:b:m:n:x:s:i:dv', ['help',
             'frontend=', 'backend=', 'monitor=',
             'min-worker=', 'max-worker=', 'spare-worker=',
-            'heartbeat-interval=', 'daemon=', 'verbose='])
+            'timeout=', 'interval=', 'daemon=', 'verbose='])
     except getopt.GetoptError, err:
         usage()
 
@@ -222,36 +252,33 @@ def parse_args(argv):
         if o in ('-h', '--help'):
             usage()
         elif o in ('-f', '--frontend'):
-            feps.append(a)
+            gsd.feps.append(a)
         elif o in ('-b', '--backend'):
-            beps.append(a)
+            gsd.beps.append(a)
         elif o in ('-m', '--monitor'):
-            meps.append(a)
+            gsd.meps.append(a)
         elif o in ('-n', '--min-worker'):
-            minw = int(a)
+            gsd.minw = int(a)
         elif o in ('-x', '--max-worker'):
-            maxw = int(a)
+            gsd.maxw = int(a)
         elif o in ('-s', '--spare-worker'):
-            maxiw = int(a)
-        elif o in ('--hearbeat-interval='):
-            hbi = int(a)
+            gsd.spaw = int(a)
+        elif o in ('--timeout='):
+            gsd.timeout = int(a)
+        elif o in ('--interval='):
+            gsd.interval = int(a)
         elif o in ('-d', '--daemon'):
             pass
         elif o in ('-v', '--verbose'):
-            pass
+            verbose = True
         else:
             usage()
 
     if (not args):
         usage()
 
-    return (args, feps, beps, meps, maxw, minw, spaw, hbi)
+    gsd.args = args
 
-def main():
-    print "Generic Service Daemon"
-    print
-    args, feps, beps, meps, maxw, minw, spaw, hbi = parse_args(sys.argv[1:])
-    gsd = GSD(args, feps, beps, meps, maxw, minw, spaw, hbi)
     gsd.start()
     return 0
 
