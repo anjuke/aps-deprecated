@@ -88,6 +88,7 @@ class Device():
         self.loop()
 
     def stop(self):
+        self.interrupted = True
         pass
     
     def loop(self):
@@ -108,7 +109,7 @@ class Device():
                 else:
                     pass
 
-            for socket, flag in events:
+            for socket, flags in events:
                 if socket == self.worker_socket:
                     self.handle_worker()
                 elif socket == self.client_socket:
@@ -135,9 +136,9 @@ class Device():
             wid = self.workers.borrow()
             assert wid
             frames = self.build_worker_request(wid, frames[:i], frames[i+2:])
-            worker_socket.send_multipart(frames)
+            self.worker_socket.send_multipart(frames)
 
-    def hanele_worker(self):
+    def handle_worker(self):
         while True:
             try:
                 frames = self.worker_socket.recv_multipart(zmq.NOBLOCK)
@@ -245,7 +246,7 @@ options:
             pass
 
     def parse(self, argv):
-        opts, args = getopt.getopt(argv[1:], 'hf:b:m:n:x:s:i:dv', ['help',
+        opts, self.args = getopt.getopt(argv[1:], 'hf:b:m:n:x:s:i:dv', ['help',
             'frontend=', 'backend=', 'monitor=',
             'min-worker=', 'max-worker=', 'spare-worker=',
             'timeout=', 'interval=', 'daemon=', 'verbose='])
@@ -278,7 +279,7 @@ options:
             else:
                 pass
 
-        if (not args):
+        if (not self.args):
             self.errno = 3
 
         if not self.feps:
@@ -299,6 +300,10 @@ def main():
         return options.errno
 
     device = Device(options)
+
+    subprocess.Popen(options.args)
+    subprocess.Popen(options.args)
+
     device.start()
 
 

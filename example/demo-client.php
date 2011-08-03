@@ -11,23 +11,22 @@ $req_seq = $client->md5("abc");
 
 $client->start_request('sleep_for', array('1'),
     function($reply, $status) {
-        echo "$reply\n";
+        echo "$status - $reply\n";
     }
 );
 $client->start_request('sleep_for', array('2'),
-    function($reply) {
-        echo "$reply\n";
-    }
+    function($reply, $status) {
+        echo "$status - $reply\n";
+    }, 2000
 );
 echo "Wait for replies\n";
-
 
 $pending = APSClient::wait_for_replies(4000);
 if ($pending > 0) {
     echo "Timeout. $pending replies discarded\n";
 }
 list($reply, $status) = APSClient::fetch_reply($req_seq);
-echo $status, $reply, "\n";
+echo "$status - $reply\n";
 echo "async: ", aps_microtime() - $bt, " microseconds\n";
 
 // sync
