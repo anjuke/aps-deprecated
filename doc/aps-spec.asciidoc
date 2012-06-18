@@ -25,7 +25,7 @@ v1.0, July 2010
 
 服务进程(Service)以ØMQ的**XREP**套接字绑定在某个位置，客户程序(Client)用ØMQ的**XREQ**套接字连接服务进程。客户程序发送请求；服务进程处理请求，之后返回结果；客户程序接收结果并进行后续操作。
 
-................
+..........................
 
  +-------+      +-------+      +-------+      +-------+
  |  PHP  |      |  PHP  |      |  PHP  |      |  PHP  |
@@ -41,14 +41,14 @@ v1.0, July 2010
        |           |  |           |  |           |
        \-----------/  \-----------/  \-----------/
 
-................
+..........................
 
 
 === Asynchronous ===
 
 要求客户程序和服务进程间实现异步的方法调用。客户程序允许一次发送多条请求给服务进程，之后一起等待结果。
 
-................
+..........................
            Synchronous RPC                          Asynchronous RPC
  
   Client      Service A    Service B        Client      Service A    Service B
@@ -68,7 +68,7 @@ v1.0, July 2010
  The services can't proceed multiple       The services can proceed multiple
  requests in parallel. Thus wait time      requests in parallel. Thus client
  becomes long.                             can gather results faster.        
-................
+..........................
 
 
 === Parallel Pipelining ===
@@ -77,7 +77,7 @@ v1.0, July 2010
 
 客户程序发起的每一个请求都会分配一个唯一的请求序列号。服务进程返回结果时，要求将相应请求的序列号原封不动的返回给客户程序，客户程序通过这一个序列号识别当前收到的结果是哪一个请求的。
 
-................
+..........................
   RPC without parallel pipelining           RPC with parallel pipelining
 
       Client           Service                  Client           Service
@@ -97,14 +97,14 @@ v1.0, July 2010
  The service must return in received       The service can return just when it
  order, even if former task is heavy       finished and the client can receive
  and following one is light.               replies faster.
-................
+..........................
 
 
 === Flexible Worker ===
 
 通常服务进程需要维护多个处理程序(Worker)，这样在接收到多个请求的时候能够并行处理这些请求。我们建议使用ØMQ来实现线程间(或进程间)的通讯，这样不必再为多线程间的共享数据而引入各种各样的锁机制，减少不必要的麻烦。
 
-................
+..........................
       A Service with several workers
  
  /-----------------------------------------\
@@ -120,7 +120,7 @@ v1.0, July 2010
  |                                         |
  \-----------------------------------------/ 
 
-................
+..........................
 
 我们这里还规范了一份处理程序和其所属的服务进程间的通讯协议。采用这一规范来实现的处理程序将能够被我们的通用服务进程调度和管理，使处理程序是采用不同的语言开发。我们的规范要求处理程序采用ØMQ的**XREQ**套接字连接至其所属的服务进程，发出准备好的消息，并等待分配的任务。
 
