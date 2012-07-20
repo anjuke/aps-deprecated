@@ -31,6 +31,6 @@ See the [Specification][spec] for details.
 
 Note: PHP extenstion for [ZeroMQ][zeromq] and [MessagePack][msgpack] required
 
-[spec]: https://github.com/anjuke/aps/blob/master/doc/aps-spec.asciidoc
+[spec]: https://github.com/anjuke/aps/blob/master/doc/aps-spec.markdown
 [zeromq]: http://www.zeromq.org/
 [msgpack]: http://msgpack.org/
