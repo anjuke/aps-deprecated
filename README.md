@@ -27,10 +27,11 @@ wait_for_replies();
 echo $count_b, $count_b, "\n";
 ```
 
-See the [Specification][spec] for details.
+See the Specification [v1.0][spec-1.0] or [v1.1][spec-1.1] for details.
 
 Note: PHP extenstion for [ZeroMQ][zeromq] and [MessagePack][msgpack] required
 
-[spec]: https://github.com/anjuke/aps/blob/master/doc/aps-spec.markdown
+[spec-1.0]: https://github.com/anjuke/aps/blob/master/doc/aps-spec-1.0.markdown
+[spec-1.1]: https://github.com/anjuke/aps/blob/master/doc/aps-spec-1.1.markdown
 [zeromq]: http://www.zeromq.org/
 [msgpack]: http://msgpack.org/
